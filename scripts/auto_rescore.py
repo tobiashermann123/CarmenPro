@@ -32,7 +32,7 @@ from layers.layer3_storage.client import get_client
 from scripts.upsert_signal import build_row
 
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-MAX_TICKERS  = 10   # safety cap per run
+MAX_TICKERS  = 5    # safety cap per run — queue delivers up to 5 per day
 
 SCORING_PROMPT = """\
 You are a quantitative stock analyst. Based on the research data below, produce a \
@@ -99,9 +99,15 @@ Return ONLY a valid JSON object, no markdown, no explanation:
 
 
 def _get_rescore_tickers() -> list[str]:
-    client = get_client()
+    """Read top tickers from rescore_queue. Falls back to daily_brief if queue empty."""
+    from layers.layer3_storage.rescore_queue import dequeue
+    tickers = dequeue(limit=MAX_TICKERS)
+    if tickers:
+        return tickers
+
+    # Fallback: legacy rescore_due from daily_brief (pre-queue runs)
     result = (
-        client.table("system_state")
+        get_client().table("system_state")
         .select("value")
         .eq("key", "daily_brief")
         .limit(1)
@@ -232,6 +238,8 @@ def main():
         row = rescore_ticker(ticker, price, eur_usd)
         if row:
             results.append(row)
+            from layers.layer3_storage.rescore_queue import mark_processed
+            mark_processed(ticker)
 
     print(f"\n  Done. {len(results)}/{len(tickers)} tickers rescored.")
 
