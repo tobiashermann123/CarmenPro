@@ -1,0 +1,1 @@
+../../../trade-portfolio/SKILL.md

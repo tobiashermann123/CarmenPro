@@ -1,0 +1,39 @@
+name: Daily Morning Snapshot
+
+on:
+  schedule:
+    # 09:45 ET = 13:45 UTC, Mon–Fri
+    - cron: "45 13 * * 1-5"
+  workflow_dispatch:   # allows manual trigger from GitHub UI
+
+jobs:
+  snapshot:
+    name: Pull prices & sync dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CARMENBOT_SPREADSHEET_ID:  ${{ secrets.CARMENBOT_SPREADSHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+    steps:
+      - name: Checkout CarmenPro
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-ci.txt
+
+      - name: Pull prices + update action states
+        run: python scripts/run_daily_snapshot.py
+
+      - name: Sync CPSignals tab to Google Sheets
+        run: python scripts/sync_to_gsheet.py

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.carmenpro.nightly</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/tobiashermann/CarmenPro/layers/layer4_valuation/flows/nightly_valuation.py</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <!-- 02:30 IST = after US market close (16:00 ET = 01:30 IST) -->
+    <key>Hour</key>   <integer>2</integer>
+    <key>Minute</key> <integer>30</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/tobiashermann/CarmenPro/logs/nightly_valuation.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/tobiashermann/CarmenPro/logs/nightly_valuation_err.log</string>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/tobiashermann/CarmenPro</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+  </dict>
+</dict>
+</plist>

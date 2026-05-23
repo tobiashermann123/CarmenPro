@@ -1,0 +1,1 @@
+../../../trade-technical/SKILL.md

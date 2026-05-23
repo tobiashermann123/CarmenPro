@@ -1,0 +1,1 @@
+../../../trade-compare/SKILL.md

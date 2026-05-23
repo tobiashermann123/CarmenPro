@@ -1,0 +1,1 @@
+../../../trade-sentiment/SKILL.md

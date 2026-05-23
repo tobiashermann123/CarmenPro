@@ -1,0 +1,1 @@
+../../../trade-thesis/SKILL.md

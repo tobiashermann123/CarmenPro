@@ -1,0 +1,1 @@
+../../../trade-sector/SKILL.md

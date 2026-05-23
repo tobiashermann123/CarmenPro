@@ -1,0 +1,9 @@
+# Slim dependency set for the daily CI pipeline.
+# Does NOT include Layer 1 (ML/NLP), Layer 5 (IBKR), or dashboard packages.
+yfinance>=0.2.40
+supabase>=2.3.0
+python-dotenv>=1.0.0
+httpx>=0.27.0
+gspread>=6.0.0
+google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
