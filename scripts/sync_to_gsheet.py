@@ -92,7 +92,24 @@ def get_latest_signals() -> list[dict]:
     return list(seen.values())
 
 
-def write_cpsignals(signals: list[dict]) -> None:
+def get_latest_snapshot_prices() -> dict[str, dict]:
+    """Returns {ticker: row} from the most recent openbb_snapshots per ticker."""
+    client = get_client()
+    result = (
+        client.table("openbb_snapshots")
+        .select("ticker,price_usd,price_eur,snapped_at")
+        .order("snapped_at", desc=True)
+        .execute()
+    )
+    seen: dict[str, dict] = {}
+    for row in result.data:
+        t = row.get("ticker", "")
+        if t and t not in seen:
+            seen[t] = row
+    return seen
+
+
+def write_cpsignals(signals: list[dict], snapshot_prices: dict[str, dict] | None = None) -> None:
     gc = _gspread_client()
     ss = gc.open_by_key(SPREADSHEET_ID)
 
@@ -101,6 +118,8 @@ def write_cpsignals(signals: list[dict]) -> None:
     except gspread.exceptions.WorksheetNotFound:
         ws = ss.add_worksheet(title="CPSignals", rows=200, cols=14)
 
+    snaps = snapshot_prices or {}
+
     header = [
         "TICKER", "SCORE", "GRADE", "SIGNAL", "PRICE_EUR",
         "ENTRY_EUR", "STOP_EUR", "T1_EUR", "T2_EUR",
@@ -108,12 +127,16 @@ def write_cpsignals(signals: list[dict]) -> None:
     ]
     rows: list[list] = [header]
     for s in sorted(signals, key=lambda x: float(x.get("composite_score") or 0), reverse=True):
+        ticker = s.get("ticker", "")
+        snap = snaps.get(ticker, {})
+        # Prefer daily snapshot price; fall back to score-time price
+        price_eur = snap.get("price_eur") or s.get("price_eur")
         rows.append([
-            s.get("ticker", ""),
+            ticker,
             _safe(s.get("composite_score"), 0),
             s.get("grade", "—"),
             s.get("signal", "—"),
-            _safe(s.get("price_eur")),
+            _safe(price_eur),
             _safe(s.get("entry_low_eur")),
             _safe(s.get("stop_eur")),
             _safe(s.get("target1_eur")),
@@ -135,8 +158,9 @@ def write_cpsignals(signals: list[dict]) -> None:
 
 def main():
     signals = get_latest_signals()
+    snapshot_prices = get_latest_snapshot_prices()
     print(f"Syncing {len(signals)} signals to CPSignals tab…")
-    write_cpsignals(signals)
+    write_cpsignals(signals, snapshot_prices)
     print("Done.")
 
 
