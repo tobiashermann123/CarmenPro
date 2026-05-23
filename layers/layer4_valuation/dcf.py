@@ -75,7 +75,7 @@ def compute_dcf(
         return None
 
     mos = (intrinsic_usd - current_price) / intrinsic_usd * 100
-    intrinsic_eur = intrinsic_usd / eur_usd if eur_usd else None
+    intrinsic_eur = intrinsic_usd / eur_usd if eur_usd and eur_usd > 0 else None
 
     return {
         "intrinsic_value_usd":   round(intrinsic_usd, 2),

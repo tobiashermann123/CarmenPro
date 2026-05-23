@@ -42,7 +42,18 @@ def get_watchlist() -> list[str]:
 
 
 def get_price(ticker: str) -> float | None:
+    """Prefer openbb_snapshots (updated daily); fall back to trade_signals."""
     client = get_client()
+    snap = (
+        client.table("openbb_snapshots")
+        .select("price_usd")
+        .eq("ticker", ticker)
+        .order("snapped_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if snap.data and snap.data[0].get("price_usd"):
+        return snap.data[0]["price_usd"]
     rows = (
         client.table("trade_signals")
         .select("price_usd")
@@ -79,7 +90,10 @@ def update_signal(ticker: str, dcf: dict | None, piotroski: dict | None) -> None
         })
     if piotroski:
         update["piotroski_score"] = piotroski["piotroski_score"]
-    client.table("trade_signals").update(update).eq("id", row.data[0]["id"]).execute()
+    try:
+        client.table("trade_signals").update(update).eq("id", row.data[0]["id"]).execute()
+    except Exception as exc:
+        print(f"[run_valuation] {ticker}: signal update failed — {exc}")
 
 
 def _piotroski_row(y: dict) -> dict:

@@ -17,7 +17,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from datetime import date, datetime, timezone
 
-from prefect import flow, task, get_run_logger
+try:
+    from prefect import flow, task, get_run_logger
+except ImportError:
+    import logging as _logging
+    def flow(*a, **kw):  # type: ignore[misc]
+        return (lambda fn: fn) if not a or not callable(a[0]) else a[0]
+    def task(*a, **kw):  # type: ignore[misc]
+        return (lambda fn: fn) if not a or not callable(a[0]) else a[0]
+    def get_run_logger():  # type: ignore[misc]
+        return _logging.getLogger(__name__)
 
 from layers.layer2_data.fx import get_eur_usd
 from layers.layer2_data.tier1_source import get_tier1_tickers
@@ -155,8 +164,19 @@ def _piotroski_row(y: dict) -> dict:
     }
 
 def _get_latest_price(ticker: str) -> float | None:
-    """Fetch most recent price from trade_signals (populated by /trade score)."""
+    """Fetch most recent price — prefers openbb_snapshots (daily), falls back to trade_signals."""
     client = get_client()
+    snap = (
+        client.table("openbb_snapshots")
+        .select("price_usd")
+        .eq("ticker", ticker)
+        .order("snapped_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if snap.data and snap.data[0].get("price_usd"):
+        return snap.data[0]["price_usd"]
+    # Fallback: last scored price
     rows = (
         client.table("trade_signals")
         .select("price_usd")
@@ -224,7 +244,10 @@ def _update_trade_signal(
     if piotroski:
         update["piotroski_score"] = piotroski["piotroski_score"]
 
-    client.table("trade_signals").update(update).eq("id", row_id).execute()
+    try:
+        client.table("trade_signals").update(update).eq("id", row_id).execute()
+    except Exception as exc:
+        print(f"[nightly_valuation] {ticker}: signal update failed — {exc}")
 
 
 if __name__ == "__main__":

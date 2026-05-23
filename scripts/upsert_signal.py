@@ -166,7 +166,12 @@ def main():
     row     = build_row(payload, eur_usd)
 
     client = get_client()
-    client.table("trade_signals").insert(row).execute()
+    try:
+        client.table("trade_signals").insert(row).execute()
+    except Exception as exc:
+        print(f"ERROR: Supabase insert failed — {exc}", file=sys.stderr)
+        print(f"Payload: {json.dumps(row, default=str)}", file=sys.stderr)
+        sys.exit(1)
 
     ticker = row["ticker"]
     score  = row.get("composite_score", "?")

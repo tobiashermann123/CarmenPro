@@ -5,6 +5,7 @@ Uses free providers only: Yahoo Finance (yfinance) for price/technicals,
 and basic ratios from the same source.
 """
 from __future__ import annotations
+import math
 import warnings
 from datetime import date, datetime, timezone
 from typing import Any
@@ -83,8 +84,10 @@ def pull_snapshot(ticker: str, eur_usd: float | None = None) -> dict[str, Any]:
         "iv_30d":              None,  # options data requires separate pull
     }
 
-    client = get_client()
-    client.table("openbb_snapshots").insert(row).execute()
+    try:
+        get_client().table("openbb_snapshots").insert(row).execute()
+    except Exception as exc:
+        print(f"[openbb_puller] {ticker}: Supabase insert failed — {exc}")
 
     return row
 
@@ -110,7 +113,8 @@ def _calc_rsi(closes, period: int = 14) -> float | None:
         loss   = (-delta.clip(upper=0)).rolling(period).mean()
         rs     = gain / loss
         rsi    = 100 - (100 / (1 + rs))
-        return round(float(rsi.iloc[-1]), 2)
+        val = float(rsi.iloc[-1])
+        return None if math.isnan(val) else round(val, 2)
     except Exception:
         return None
 

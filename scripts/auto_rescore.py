@@ -137,12 +137,11 @@ def _call_claude(prompt: str) -> str:
 
 
 def _extract_json(text: str) -> dict:
-    # Strip markdown code fences if present
     text = text.strip()
     if text.startswith("```"):
-        text = text.split("```")[1]
+        text = text.split("```")[1].strip()
         if text.startswith("json"):
-            text = text[4:]
+            text = text[4:].strip()
     return json.loads(text.strip())
 
 
@@ -181,8 +180,11 @@ def rescore_ticker(ticker: str, price_usd: float, eur_usd: float) -> dict | None
     row = build_row(payload, eur_usd)
     row["source"] = "score"
 
-    client = get_client()
-    client.table("trade_signals").insert(row).execute()
+    try:
+        get_client().table("trade_signals").insert(row).execute()
+    except Exception as exc:
+        print(f"  {ticker}: Supabase insert failed — {exc}")
+        return None
 
     score  = row.get("composite_score", "?")
     signal = row.get("signal", "?")

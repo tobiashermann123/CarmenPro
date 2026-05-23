@@ -21,7 +21,7 @@ def compute_piotroski(current: dict, prior: dict) -> dict | None:
     """
     current / prior: dicts from raw_fundamentals rows.
     Required keys: roa, cfo, total_assets, total_debt, current_ratio,
-                   shares_outstanding, gross_margin, asset_turnover, net_income.
+                   shares_outstanding, gross_margin, asset_turnover.
     """
     required = ("roa", "cfo", "total_assets", "total_debt",
                 "current_ratio", "shares_outstanding", "gross_margin", "asset_turnover")

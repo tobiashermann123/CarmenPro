@@ -2,7 +2,7 @@ name: Nightly Valuation
 
 on:
   schedule:
-    # 22:00 UTC = 18:00 ET, Mon–Fri (2h after US market close)
+    # 22:00 UTC = 18:00 EDT (summer) / 17:00 EST (winter), Mon–Fri (2h after US market close)
     - cron: "0 22 * * 1-5"
   workflow_dispatch:
 

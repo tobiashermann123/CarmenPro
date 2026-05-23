@@ -2,7 +2,7 @@ name: Daily Morning Snapshot
 
 on:
   schedule:
-    # 09:45 ET = 13:45 UTC, Mon–Fri
+    # 13:45 UTC = 09:45 EDT (summer) / 08:45 EST (winter), Mon–Fri
     - cron: "45 13 * * 1-5"
   workflow_dispatch:   # allows manual trigger from GitHub UI
 

@@ -44,7 +44,13 @@ def _gspread_client():
 
     sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if sa_json:
-        info = json.loads(sa_json)
+        try:
+            info = json.loads(sa_json)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {e}. "
+                "Make sure the secret is a minified single-line JSON string."
+            ) from e
         creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     else:
         sa_path = Path(ROOT / "credentials" / "service_account.json")
@@ -92,7 +98,7 @@ def write_cpsignals(signals: list[dict]) -> None:
 
     try:
         ws = ss.worksheet("CPSignals")
-    except Exception:
+    except gspread.exceptions.WorksheetNotFound:
         ws = ss.add_worksheet(title="CPSignals", rows=200, cols=14)
 
     header = [
@@ -119,8 +125,11 @@ def write_cpsignals(signals: list[dict]) -> None:
             (s.get("generated_at") or "")[:10],
         ])
 
-    ws.clear()
-    ws.update(range_name="A1", values=rows)
+    try:
+        ws.clear()
+        ws.update(range_name="A1", values=rows)
+    except Exception as exc:
+        raise RuntimeError(f"Google Sheets write failed — {exc}") from exc
     print(f"  ✓ CPSignals updated — {len(signals)} tickers")
 
 

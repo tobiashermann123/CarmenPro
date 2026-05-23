@@ -24,21 +24,8 @@ def get_latest_signal(ticker: str) -> dict | None:
     return result.data[0] if result.data else None
 
 
-def check_action_state(ticker: str, current_price_usd: float) -> str:
-    """
-    Returns the current action state for a ticker based on latest stored signal.
-
-    BUY_NOW      — price is inside entry zone
-    LIMIT_QUEUED — price is 0–5% above entry_high
-    WAIT         — price is >5% above entry_high
-    HOLD         — signal is Hold/Accumulate and no entry zone defined
-    AVOID        — signal is Avoid or score < 40
-    NO_SIGNAL    — no stored signal yet
-    """
-    signal = get_latest_signal(ticker)
-    if not signal:
-        return "NO_SIGNAL"
-
+def _state_from_signal(signal: dict, current_price_usd: float) -> str:
+    """Derive action state from a pre-fetched signal dict."""
     if signal.get("signal") in ("Avoid", "Caution") or (signal.get("composite_score") or 0) < 40:
         return "AVOID"
 
@@ -53,10 +40,29 @@ def check_action_state(ticker: str, current_price_usd: float) -> str:
             return "BUY_NOW"
         return "WAIT"  # below zone — wait for it to come up, or reassess
 
+    if entry_high == 0:
+        return "WAIT"
     gap_pct = (current_price_usd - entry_high) / entry_high
     if gap_pct <= 0.05:
         return "LIMIT_QUEUED"
     return "WAIT"
+
+
+def check_action_state(ticker: str, current_price_usd: float) -> str:
+    """
+    Returns the current action state for a ticker based on latest stored signal.
+
+    BUY_NOW      — price is inside entry zone
+    LIMIT_QUEUED — price is 0–5% above entry_high
+    WAIT         — price is >5% above entry_high
+    HOLD         — signal is Hold/Accumulate and no entry zone defined
+    AVOID        — signal is Avoid or score < 40
+    NO_SIGNAL    — no stored signal yet
+    """
+    signal = get_latest_signal(ticker)
+    if not signal:
+        return "NO_SIGNAL"
+    return _state_from_signal(signal, current_price_usd)
 
 
 def flag_rescore_if_needed(ticker: str, current_price_usd: float) -> bool:
@@ -74,11 +80,13 @@ def flag_rescore_if_needed(ticker: str, current_price_usd: float) -> bool:
 
     change_pct = abs(current_price_usd - snapshot_price) / snapshot_price
     if change_pct > 0.05:
-        client = get_client()
-        client.table("trade_signals").update({
-            "rescore_required": True,
-            "rescore_reason":   f"Price moved {change_pct:.1%} since last score (was ${snapshot_price:.2f}, now ${current_price_usd:.2f})",
-        }).eq("id", signal["id"]).execute()
+        try:
+            get_client().table("trade_signals").update({
+                "rescore_required": True,
+                "rescore_reason":   f"Price moved {change_pct:.1%} since last score (was ${snapshot_price:.2f}, now ${current_price_usd:.2f})",
+            }).eq("id", signal["id"]).execute()
+        except Exception as exc:
+            print(f"[price_monitor] {ticker}: rescore flag write failed — {exc}")
         return True
 
     return False
@@ -87,15 +95,30 @@ def flag_rescore_if_needed(ticker: str, current_price_usd: float) -> bool:
 def update_action_state(ticker: str, current_price_usd: float) -> str:
     """
     Convenience: checks state, updates the latest signal row, returns new state.
+    Single DB read — reuses the fetched signal for both state check and rescore flag.
     """
-    state  = check_action_state(ticker, current_price_usd)
     signal = get_latest_signal(ticker)
+    state  = _state_from_signal(signal, current_price_usd) if signal else "NO_SIGNAL"
 
     if signal and signal.get("action_state") != state:
-        client = get_client()
-        client.table("trade_signals").update({
-            "action_state": state,
-        }).eq("id", signal["id"]).execute()
+        try:
+            get_client().table("trade_signals").update({
+                "action_state": state,
+            }).eq("id", signal["id"]).execute()
+        except Exception as exc:
+            print(f"[price_monitor] {ticker}: action_state update failed — {exc}")
 
-    flag_rescore_if_needed(ticker, current_price_usd)
+    if signal:
+        snapshot_price = signal.get("price_usd")
+        if snapshot_price:
+            change_pct = abs(current_price_usd - snapshot_price) / snapshot_price
+            if change_pct > 0.05:
+                try:
+                    get_client().table("trade_signals").update({
+                        "rescore_required": True,
+                        "rescore_reason":   f"Price moved {change_pct:.1%} since last score (was ${snapshot_price:.2f}, now ${current_price_usd:.2f})",
+                    }).eq("id", signal["id"]).execute()
+                except Exception as exc:
+                    print(f"[price_monitor] {ticker}: rescore flag write failed — {exc}")
+
     return state
