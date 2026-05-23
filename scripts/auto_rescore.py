@@ -179,7 +179,7 @@ def rescore_ticker(ticker: str, price_usd: float, eur_usd: float) -> dict | None
     payload.setdefault("tier", 1)
 
     row = build_row(payload, eur_usd)
-    row["source"] = "auto_rescore"
+    row["source"] = "score"
 
     client = get_client()
     client.table("trade_signals").insert(row).execute()
