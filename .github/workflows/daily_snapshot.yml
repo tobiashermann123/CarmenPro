@@ -17,6 +17,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       CARMENBOT_SPREADSHEET_ID:  ${{ secrets.CARMENBOT_SPREADSHEET_ID }}
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+      TAVILY_API_KEY:            ${{ secrets.TAVILY_API_KEY }}
 
     steps:
       - name: Checkout CarmenPro
@@ -34,6 +36,9 @@ jobs:
 
       - name: Pull prices + update action states
         run: python scripts/run_daily_snapshot.py
+
+      - name: Auto-rescore flagged tickers
+        run: python scripts/auto_rescore.py
 
       - name: Sync CPSignals tab to Google Sheets
         run: python scripts/sync_to_gsheet.py
