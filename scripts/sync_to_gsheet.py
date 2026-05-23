@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -109,6 +109,26 @@ def get_latest_snapshot_prices() -> dict[str, dict]:
     return seen
 
 
+def _pct_to_entry(price_eur, entry_low_eur) -> str:
+    """How far current price is above the entry low (negative = already inside/below entry)."""
+    try:
+        pct = (float(price_eur) - float(entry_low_eur)) / float(entry_low_eur) * 100
+        return f"{pct:+.1f}%"
+    except (TypeError, ValueError, ZeroDivisionError):
+        return "—"
+
+
+def _score_age(generated_at: str | None) -> str:
+    if not generated_at:
+        return "—"
+    try:
+        scored = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        days = (datetime.now(timezone.utc) - scored).days
+        return f"{days}d"
+    except (ValueError, TypeError):
+        return "—"
+
+
 def write_cpsignals(signals: list[dict], snapshot_prices: dict[str, dict] | None = None) -> None:
     gc = _gspread_client()
     ss = gc.open_by_key(SPREADSHEET_ID)
@@ -116,23 +136,28 @@ def write_cpsignals(signals: list[dict], snapshot_prices: dict[str, dict] | None
     try:
         ws = ss.worksheet("CPSignals")
     except gspread.exceptions.WorksheetNotFound:
-        ws = ss.add_worksheet(title="CPSignals", rows=200, cols=14)
+        ws = ss.add_worksheet(title="CPSignals", rows=200, cols=18)
 
     snaps = snapshot_prices or {}
 
     header = [
-        "TICKER", "SCORE", "GRADE", "SIGNAL", "PRICE_EUR",
-        "ENTRY_EUR", "STOP_EUR", "T1_EUR", "T2_EUR",
-        "MOS_PCT", "PIOTROSKI", "IV_EUR", "SOURCE", "UPDATED",
+        # --- Core decision columns ---
+        "TICKER", "ACTION", "SCORE", "GRADE", "SIGNAL",
+        "PRICE_EUR", "ENTRY_EUR", "STOP_EUR", "T1_EUR", "T2_EUR",
+        "R/R", "POSITION_EUR", "%_TO_ENTRY",
+        # --- Valuation (populated after nightly run) ---
+        "MOS_PCT", "PIOTROSKI", "IV_EUR",
+        # --- Meta ---
+        "SCORE_AGE", "UPDATED",
     ]
     rows: list[list] = [header]
     for s in sorted(signals, key=lambda x: float(x.get("composite_score") or 0), reverse=True):
         ticker = s.get("ticker", "")
         snap = snaps.get(ticker, {})
-        # Prefer daily snapshot price; fall back to score-time price
         price_eur = snap.get("price_eur") or s.get("price_eur")
         rows.append([
             ticker,
+            s.get("action_state", "—"),
             _safe(s.get("composite_score"), 0),
             s.get("grade", "—"),
             s.get("signal", "—"),
@@ -141,10 +166,13 @@ def write_cpsignals(signals: list[dict], snapshot_prices: dict[str, dict] | None
             _safe(s.get("stop_eur")),
             _safe(s.get("target1_eur")),
             _safe(s.get("target2_eur")),
+            _safe(s.get("risk_reward"), 1),
+            _safe(s.get("position_size_eur"), 0),
+            _pct_to_entry(price_eur, s.get("entry_low_eur")),
             _safe(s.get("margin_of_safety_pct"), 1),
             _safe(s.get("piotroski_score"), 0) if s.get("piotroski_score") is not None else "—",
             _safe(s.get("intrinsic_value_eur")),
-            s.get("source", "—"),
+            _score_age(s.get("generated_at")),
             (s.get("generated_at") or "")[:10],
         ])
 
